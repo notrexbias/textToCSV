@@ -1,126 +1,48 @@
-import re, csv
+import csv
+import re
 
-file = open('/Users/pranavshridhar/Desktop/gre_vocab_new 2.txt','r',errors = 'replace')
+# open the text file
+file = open('gre_vocab_text.txt', 'r')
 
-dictionary = {}
-key_words_list = []
-key_meanings_list = []
-key_eg_sentences_list = []
-words_list = []
-meanings_list = []
-eg_sentences_list = []
+# number followed by period pattern e.g. 1. or 233.
+subjectpattern = re.compile(r'^(\d)+(\.)')
 
-# Regex to match word number and word itself (Eg. 1. Angry)
+mydict = {}
+# mydict = { subjectnumber : [ subject, synonym, meaning, example] }
+# e.g. mydict = { 1 : [ 'angry', 'fume',
+# 'feel or express great anger.', 'She sat in the car, silently Fuming at the traffic jam.'] }
 
-numRegex = re.compile(r'(\d)(\d*)?(\.)(\s*)?(\w*)')
-
-matched_strings_list = []
-for groups in numRegex.findall(file.read()):
-    item = ''.join(groups)
-    clean_item = item.replace('\n','')
-    matched_strings_list.append(clean_item)
-
-
-def hasNumbers(inputString):
-    return bool(re.search(r'\d', inputString))
-
-def hasNumbersDot(inputString):
-    return bool(re.search(r'^((\d)+?(\.))', inputString))
-    
-
-# Form a list of lines in the file
-
-lines_list = file.readlines()
-
-clean_lines_list = []
-
-for line in lines_list:
-    clean_line = line.replace('\n','')
-    clean_lines_list.append(clean_line)
-for line in clean_lines_list:
-    if line == '':
-        del clean_lines_list[clean_lines_list.index(line)]
-
-
-matched_strings_list = []
-
-for i,line in enumerate(clean_lines_list):
-    if hasNumbersDot(line) == True:
-        string = line
-        index = string.index('.')
-        if len(string[index+1:]) == 0:
-            string = line + ' ' + clean_lines_list[i+1]
-            matched_strings_list.append(string)
-        else:
-            matched_strings_list.append(line)
-        
-        
-for i,line in enumerate(clean_lines_list):
-        
-    if '=' in line:           # Words and Meanings Extraction Part
-        string = line
-        index = string.index('=')
-        word = string[:index]
-        meaning = string[index+1:]
-        words_list.append(word)
-        meanings_list.append(meaning)
-        
-    elif ':' in line:         # Examples Extraction Part 
-        string = line
-        index = string.index(':')
-        
-        if i < 4428:
-            if '=' not in clean_lines_list[i+1] and hasNumbersDot(clean_lines_list[i+1]) == False:
-                example = string[index+1:] + clean_lines_list[i+1]
-                eg_sentences_list.append(example)
-        
-            else:
-                example = string[index+1:]
-                eg_sentences_list.append(example)
-        if i == 4428:
-            example = string[index+1:]
-            eg_sentences_list.append(example)
-
-    elif hasNumbersDot(line) == True:
-        if i == 0:
-            continue
-        key_words_list.append(words_list)
-        key_meanings_list.append(meanings_list)
-        key_eg_sentences_list.append(eg_sentences_list)
-        words_list = []
-        meanings_list = []
-        eg_sentences_list = []
-
-
-zipped_list = list(zip(key_words_list,key_meanings_list,key_eg_sentences_list))
-
-refined_zipped_list = []
-
-for tuples in zipped_list:
-    litup = list(tuples)
-    refined_zipped_list.append(litup)
-
-values_list = []
-for lists in refined_zipped_list:
-    values = list(zip(*lists))
-    values_list.append(values)
-
-for i in range(278):
-    dictionary[matched_strings_list[i]] = values_list[i]
-   
+# create and open a new csv file
+with open('gre_vocab_csv.csv', 'w') as csvfile:
+    wr = csv.writer(csvfile, quoting=csv.QUOTE_ALL)
+    wr.writerow(['SUBJECT', 'SYNONYM', 'MEANING', 'EXAMPLE'])
+    for line in file:  # loop over each line in the text file
+        strippedline = line.rstrip().lstrip()  # strip spaces and new line characters from line
+        match = subjectpattern.search(strippedline)  # search for our pattern
+        # the idea is to match the pattern above, then take the line with the pattern, split it by the period(.),
+        # take the word i.e. 1. Angry, when split, becomes ['1', 'angry'], the subject is the second element of the
+        # split and subjectnumber is the first element of the split. For lines with '=', we split by the '=' and take
+        # the first element as the synonym and the second as the meaning For lines with ':', we split by the ':' and
+        # take the second as the example. It turns out there are lines where the subject is in a new line, so for that
+        # we pick those words that do not fit our other conditions and check if we have a subject in the current list,
+        # if not, we push the word
+        if match:
+            subject = strippedline.split('.')
+            word = subject[1].rstrip().lstrip()
+            mydict[subject[0]] = [word]
+        elif '=' in strippedline:
+            synonym = strippedline.split('=')
+            mydict[subject[0]].append(synonym[0].rstrip().lstrip())
+            mydict[subject[0]].append(synonym[1].rstrip().lstrip())
+        elif ':' in strippedline:
+            example = strippedline.split(':')
+            mydict[subject[0]].append(example[1].rstrip().lstrip())
+            wr.writerow(mydict[subject[0]])
+            del mydict[subject[0]][1:len(mydict[subject[0]])]
+        elif strippedline != '' and mydict[subject[0]][0] == '':
+            mydict[subject[0]][0] = strippedline
 file.close()
+csvfile.close()
 
-
-with open('gre.csv', 'w') as f:
-    w = csv.writer(f, delimiter=',')
-    w.writerow(['TOPIC', 'WORD', 'MEANING', 'SENTENCE'])
-
-    for Topic, Words in dictionary.items():
-        for Word, Meaning, Sentence in Words:
-            w.writerow([Topic, Word, Meaning, Sentence,])
-            # w.writerow('\n')
-         
-f.close()
-
-
-
+# todo there are some examples that are broken into two by a newline character, find a way of appending it to the end
+#  of the example.
